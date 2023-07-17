@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <!-- Include Plotly library -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='lib/fa-web-6.4.0/css/all.min.css') }}"/>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon"/>
+    <style>
+      /* CSS styles for the waveform display container */
+      .container {
+        width: 90vw; /* 90% of viewport width */
+        height: 45vh; /* 45% of viewport height */
+        position: relative; /* Relative positioning for button placement */
+      }
+
+      /* CSS styles for the buttons */
+      .button-container {
+        position: absolute;
+        bottom: 20px; /* Adjust the spacing from the bottom as needed */
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+      }
+
+      .button-container button {
+        background-color: #f2f2f2;
+        border: none;
+        padding: 10px;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+      }
+
+      .button-container button:hover {
+        background-color: #e6e6e6;
+      }
+
+      .button-container button[disabled] {
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container" id="waveform-container"></div>
+    <div class="container" id="spectrum-container"></div>
+    <div class="button-container">
+      <button id="play-pause-button"><i class="fas fa-play"></i></button>
+      <button id="stop-button" disabled><i class="fas fa-stop"></i></button>
+    </div>
+
+    <script>
+      const playPauseButton = document.getElementById('play-pause-button');
+      const stopButton = document.getElementById('stop-button');
+      const waveformContainer = document.getElementById('waveform-container');
+      const spectrumContainer = document.getElementById('spectrum-container');
+      let scriptNode; // Declare scriptNode outside the scope of event handlers
+      // const BUFFER_SIZE = 4096;
+      const BUFFER_SIZE = 1024;
+      const N_BUFFER = 100;
+      const MAX_BUFFER_SIZE = N_BUFFER * BUFFER_SIZE;
+      const yData = new Array(MAX_BUFFER_SIZE).fill(0);
+      const audioDataFull = [];
+      // make a first plot
+      Plotly.newPlot(waveformContainer, [{ y: yData }],
+      {
+        title: 'Waveform',
+        xaxis: {
+          title: 'Samples no.'
+        },
+        yaxis: {
+          title: 'Amplitude',
+          range: [-1, 1],
+        },
+      },
+      {
+        renderer: 'webgl', // Use WebGL if available --> useful?
+        responsive: false
+      }
+      );
+
+      function startRecording() {
+        // Capture audio from user's microphone using Web Audio API
+        navigator.mediaDevices.getUserMedia({ 
+          audio: { autoGainControl: false } // check out the other parameters 
+        })
+        .then(function(stream) {
+            // Create an AudioContext
+            const audioContext = new AudioContext();
+            const sampleRate = audioContext.sampleRate;
+            const audioLength = MAX_BUFFER_SIZE / sampleRate;
+            // Create a MediaStreamAudioSourceNode from the microphone stream
+            const source = audioContext.createMediaStreamSource(stream);
+
+            // Connect audio source to a script processor node
+            scriptNode = audioContext.createScriptProcessor(BUFFER_SIZE, 1, 1);
+            source.connect(scriptNode);
+            scriptNode.connect(audioContext.destination);
+
+            // Process audio data and update the waveform plot
+            scriptNode.onaudioprocess = function(event) {
+              if (!recording) return; // Stop processing if recording is false
+              const audioData = event.inputBuffer.getChannelData(0);
+              // update yData with new audio data
+              yData.splice(0, BUFFER_SIZE);
+              yData.push(...audioData);
+              // update audioDataFull with new audio data
+              audioDataFull.push(...audioData);
+
+              // Plot the audio data in waveform display container
+              Plotly.newPlot(waveformContainer, [{ y: yData }], {
+                title: 'Waveform',
+                xaxis: {
+                  title: 'Samples no.'
+                },
+                yaxis: {
+                  title: 'Amplitude',
+                  range: [-1, 1],
+                }
+            });
+          };
+        })
+        .catch(function(error) {
+            console.log('Error accessing microphone:', error);
+        });
+      }
+
+      let recording = false;
+      playPauseButton.addEventListener('click', () => {
+        if (recording) {
+          playPauseButton.innerHTML = '<i class="fas fa-play"></i>';
+          recording = false;
+        } else {
+          playPauseButton.innerHTML = '<i class="fas fa-pause"></i>';
+          if (stopButton.disabled) {
+            stopButton.disabled = false;
+          }
+          recording = true;
+          startRecording();
+        }
+      });
+
+      stopButton.addEventListener('click', () => {
+        playPauseButton.innerHTML = '<i class="fas fa-play"></i>';
+        recording = false;
+        stopButton.disabled = true;
+        playPauseButton.disabled = true;
+        if (scriptNode) {
+          scriptNode.disconnect();
+          scriptNode = null;
+        }
+
+        // send the data to the backend flask server
+        const data = new FormData();
+        data.append('audio', audioDataFull);
+        fetch('/upload', {
+          method: 'POST',
+          body: data
+        })
+        .then(response => response.json())
+        .then(data => {
+          console.log('Success:', data);
+
+          const spectrogram = data['spectrogram'];
+          const time = spectrogram['time'];
+          const frequency = spectrogram['frequency'];
+          const amplitude = spectrogram['amplitude'];
+          const transposedAmplitude = amplitude[0].map((col, i) => amplitude.map(row => row[i]));
+          // plot the spectrogram
+          Plotly.newPlot(spectrumContainer,
+          [{
+            x: time,
+            y: frequency,
+            z: transposedAmplitude,
+            type: 'heatmap',
+            colorscale: 'Jet'
+          }],
+          {
+            title: 'Spectrogram',
+            xaxis: {
+              title: 'Time (s)'
+            },
+            yaxis: {
+              title: 'Frequency (Hz)',
+              range: [0, 5000]
+            }
+          });
+        })
+        .catch(error => {
+          console.error('Error:', error); // Handle any errors that occur during the fetch request
+        });
+
+        // create a new plot with the full audio data, but keep the old one
+        Plotly.newPlot(waveformContainer, [{ y: audioDataFull }], {
+          title: 'Waveform',
+          xaxis: {
+            title: 'Samples no.'
+          },
+          yaxis: {
+            title: 'Amplitude',
+            range: [-1, 1],
+          }
+        });
+      });
+    </script>
+  </body>
+</html>
