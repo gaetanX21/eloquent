@@ -16,10 +16,10 @@ def process_audio():
     print('Server endpoint "/upload" has been triggered')
     
     # Process the uploaded data or perform any required actions
-    audio_data_str = request.get_data('audio')
-    list_audio_data = audio_data_str.split(',')
-    audio_data = [float(i) for i in list_audio_data]
-
+    audio_data_str = request.form.get('audio')
+    # parse this string into a list of floats
+    audio_data = [float(x) for x in audio_data_str.split(',')]
+    print('Audio data received: ', audio_data[:5])
     # Perform analysis using Praat-Parselmouth
     snd = pm.Sound(audio_data)
     # save to wav file

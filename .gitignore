@@ -1,6 +1,5 @@
-webapp/static/lib
-webapp/wav
-webapp/__pycache__
+webapp/static
 webapp/venv
 
 *.ipynb
+*.wav
