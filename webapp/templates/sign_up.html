@@ -1,34 +1,45 @@
 {% extends 'base.html' %} {% block title %}Sign Up{% endblock %} {% block
 content %}
-<form method="POST">
-  <h3 align="center">Sign Up</h3>
-  <div class="form-group">
-    <label for="email">Email address</label>
-    <input type="email" class="form-control" id="email" name="email" />
+
+<div class="container">
+  <h1 class="display-4 text-center my-4">Sign up</h1>
+
+  <div
+    class="form-container w-50 mx-auto d-flex justify-content-center align-items-center"
+  >
+    <form method="POST">
+      <div class="form-group">
+        <label for="email">Email address</label>
+        <input type="email" class="form-control" id="email" name="email" />
+      </div>
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" class="form-control" id="username" name="username" />
+      </div>
+      <div class="form-group">
+        <label for="password1">Password</label>
+        <input
+          type="password"
+          class="form-control"
+          id="password1"
+          name="password1"
+        />
+      </div>
+      <div class="form-group">
+        <label for="password2">Confirm password</label>
+        <input
+          type="password"
+          class="form-control"
+          id="password2"
+          name="password2"
+        />
+      </div>
+      <br />
+      <div class="text-center">
+        <button type="submit" class="btn btn-primary">Sign Up</button>
+      </div>
+    </form>
   </div>
-  <div class="form-group">
-    <label for="username">Username</label>
-    <input type="text" class="form-control" id="username" name="username" />
-  </div>
-  <div class="form-group">
-    <label for="password1">Password</label>
-    <input
-      type="password"
-      class="form-control"
-      id="password1"
-      name="password1"
-    />
-  </div>
-  <div class="form-group">
-    <label for="password2">Confirm password</label>
-    <input
-      type="password"
-      class="form-control"
-      id="password2"
-      name="password2"
-    />
-  </div>
-  <br />
-  <button type="submit" class="btn btn-primary">Sign Up</button>
-</form>
+</div>
+
 {% endblock %} ```

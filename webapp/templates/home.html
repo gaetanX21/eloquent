@@ -1,25 +1,43 @@
 {% extends 'base.html' %} {% block title %}Home{% endblock %} {% block content
 %}
-<h1 align="center">Notes</h1>
-<ul class="list-group list-group-flush" id="notes">
-  {% for note in user.notes %}
-  <li class="list-group-item">
-    {{ note.data }}
-    <button type="button" class="close" onClick="deleteNote({{ note.id }})">
-      <span aria-hidden="true">&times;</span>
-    </button>
-  </li>
-  {% endfor %}
-</ul>
-<form method="POST">
-  <textarea
-    name="note"
-    id="note"
-    placeholder="What's on your mind?"
-    class="form-control"
-  ></textarea>
-  <div align="center">
-    <button type="submit" class="btn btn-primary">Add note</button>
+
+<section class="bg-dark text-light p-5 text-center">
+  <div class="container">
+    <h1 class="display-4 mb-3">
+      Welcome to <span class="text-primary">Eloquent</span>
+    </h1>
+    <p class="lead">
+      Master the art of public speaking with the help of our AI-powered tool.
+    </p>
+    <a href="/record" class="btn btn-primary btn-lg">Record</a>
   </div>
-</form>
+</section>
+
+<section class="p-5">
+  <div class="container">
+    <div class="row text-center">
+      <div class="col-md">
+        <p>
+          <i class="fas fa-comments"></i> Over 90% of employers say
+          communication is the #1 skill they look for in new hires.
+        </p>
+      </div>
+      <div class="col-md">
+        <p>
+          <i class="fas fa-star"></i> Speech impact is<br />
+          5% words<br />
+          40% delivery<br />
+          55% non-verbal.<br />
+        </p>
+      </div>
+      <div class="col-md">
+        <p>
+          <i class="fas fa-frown"></i> Public speaking anxiety, also known as
+          glossophobia, affects about 73% of the population.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
 {% endblock %}

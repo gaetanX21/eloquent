@@ -23,7 +23,7 @@ def create_app():
     with app.app_context():
         db.create_all()
 
-    from .models import User, Note
+    from .models import User, Recording
 
     login_manager = LoginManager()
     login_manager.login_view = "auth.login"

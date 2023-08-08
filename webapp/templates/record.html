@@ -1,104 +1,39 @@
 {% extends 'base.html' %} {% block title %}Record{% endblock %} {% block content
 %}
+<div class="container">
+  <h1 class="display-4 text-center my-4">Record</h1>
+  <div class="audio-container">
+    <audio id="audio-preview" class="w-100 mb-3" controls></audio>
+  </div>
+  <div class="d-flex justify-content-center align-items-center">
+    <button id="record-button" class="btn btn-outline-danger mx-2">
+      <i class="fas fa-microphone"></i>
+    </button>
+    <button id="save-button" class="btn btn-outline-success mx-2 disabled">
+      <i class="fas fa-save"></i>
+    </button>
+    <button id="discard-button" class="btn btn-outline-danger mx-2 disabled">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+  <div class="d-flex justify-content-center align-items-center">
+    <div id="recording-indicator" class="m-4">
+      <div
+        id="recording-spinner"
+        class="spinner-grow text-danger invisible"
+        role="status"
+      >
+        <span class="sr-only">Loading...</span>
+      </div>
+      <div class="recording-timer" role="status">
+        <span id="recording-minutes">00</span>:<span id="recording-seconds"
+          >00</span
+        >
+      </div>
+    </div>
+  </div>
 
-<div id="waveform-container"></div>
-<!-- use boostrap to make beautiful -->
-<button id="record-button">Start Recording</button>
-<button id="stop-button">Stop Recording</button>
-
-<script>
-  const recordButton = document.getElementById("record-button");
-  const stopButton = document.getElementById("stop-button");
-  const waveformContainer = document.getElementById("waveform-container");
-
-  const audioContext = new AudioContext();
-  const bufferSize = 1024;
-  const nBuffer = 8;
-  const waveformLength = bufferSize * nBuffer;
-  // create a new array of 0s of length waveformLength
-  const waveformData = new Float32Array(waveformLength);
-
-  let mediaStream;
-  let scriptNode;
-
-  function startRecording() {
-    navigator.mediaDevices
-      .getUserMedia({ audio: true })
-      .then(function (stream) {
-        mediaStream = stream;
-        const source = audioContext.createMediaStreamSource(stream);
-        scriptNode = audioContext.createScriptProcessor(bufferSize, 1, 1);
-
-        source.connect(scriptNode);
-        scriptNode.connect(audioContext.destination);
-
-        scriptNode.onaudioprocess = function (event) {
-          const audioData = event.inputBuffer.getChannelData(0);
-          updateWaveform(audioData);
-        };
-
-        // stores all the audio data
-        mediaRecorder = new MediaRecorder(mediaStream);
-        mediaRecorder.addEventListener("dataavailable", handleDataAvailable);
-
-        recordButton.disabled = true;
-        stopButton.disabled = false;
-
-        mediaRecorder.start();
-      })
-      .catch(function (error) {
-        console.log("Error accessing microphone:", error);
-      });
-  }
-
-  function stopRecording() {
-    if (mediaStream) {
-      mediaStream.getTracks().forEach((track) => track.stop());
-      mediaStream = null;
-    }
-
-    if (mediaRecorder) {
-      mediaRecorder.stop();
-      mediaRecorder = null;
-    }
-
-    if (scriptNode) {
-      scriptNode.disconnect();
-      scriptNode = null;
-    }
-
-    recordButton.disabled = false;
-    stopButton.disabled = true;
-  }
-
-  function updateWaveform(audioData) {
-    Plotly.newPlot(waveformContainer, [{ y: audioData }], {
-      title: "Waveform",
-      xaxis: { title: "Sample" },
-      yaxis: { title: "Amplitude" },
-    });
-  }
-
-  function handleDataAvailable(event) {
-    blob = new Blob([event.data], { type: "audio/ogg; codecs=opus" });
-    const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    // audio.play();
-    // send blob to server
-    const formData = new FormData();
-    formData.append("audio", blob, "audio.ogg");
-    fetch("/upload", {
-      method: "POST",
-      body: formData,
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        console.log(data);
-      });
-  }
-
-  recordButton.addEventListener("click", startRecording);
-  stopButton.addEventListener("click", stopRecording);
-</script>
-
-{% endblock %}
+  {% endblock %} {% block scripts %}
+  <script src="{{ url_for('static', filename='record.js') }}"></script>
+  {% endblock %}
+</div>

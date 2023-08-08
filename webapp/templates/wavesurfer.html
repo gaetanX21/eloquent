@@ -1,0 +1,28 @@
+{% extends 'base.html' %} {% block title %}Waveform{% endblock %} {% block
+content %}
+
+<h1>Press Record to start recording - test 🎙️</h1>
+
+<button id="record">Record</button>
+<button id="play" disabled>Play</button>
+
+<a style="display: none">Download audio</a>
+
+<div
+  id="waveform"
+  style="
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    width: 1000px;
+    height: 200px;
+  "
+></div>
+
+<script src="https://unpkg.com/wavesurfer.js"></script>
+<script
+  src="{{ url_for('static', filename='waveplot.js') }}"
+  type="module"
+></script>
+<!-- check that the "module" thing is is ok -->
+
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends 'base.html' %} {% block title %}Home{% endblock %} {% block content
+%}
+<div class="container mb-4">
+  <h1 class="display-4 text-center my-4">Saved Recordings</h1>
+  <ul class="list-group list-group-flush" id="recordings">
+    {% if user.recordings|length == 0 %}
+    <li class="list-group-item">
+      <p class="text-center">No recordings saved yet.</p>
+    </li>
+    {% endif %} {% for recording in user.recordings %}
+    <li
+      class="list-group-item rounded my-1 p-3"
+      id="recording-{{ recording.id }}"
+    >
+      <!-- make the audio data playable in an audio player -->
+      <p>Recording #{{ recording.id }}</p>
+      <p>Created on {{ recording.date }}</p>
+      <div class="audio-container d-flex justify-content-left">
+        <audio controls>
+          <source
+            src="{{ url_for('views.play_audio', recording_id=recording.id) }}"
+            type="audio/webm"
+          />
+          Your browser does not support the audio element.
+        </audio>
+        <button
+          type="button"
+          class="btn btn-outline-primary mx-2 btn-square-md"
+          onClick="viewPerformanceOverview({{ recording.id }})"
+        >
+          <i class="fas fa-magnifying-glass-chart"></i>
+        </button>
+        <button
+          type="button"
+          class="btn btn-outline-danger mx-2 btn-square-md"
+          onClick="deleteRecording({{ recording.id }})"
+        >
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %} {% block scripts %}
+<script src="{{ url_for('static', filename='saved.js') }}"></script>
+{% endblock %}
