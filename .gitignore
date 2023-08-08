@@ -4,4 +4,3 @@ webapp/venv
 *.ipynb
 *.wav
 *.db
-# .*db
