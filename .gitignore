@@ -3,4 +3,5 @@ webapp/venv
 
 *.ipynb
 *.wav
+*.webm
 *.db
