@@ -9,6 +9,11 @@ class Recording(db.Model):
     date = db.Column(db.DateTime(timezone=True), default=func.now())
     audio_blob = db.Column(db.LargeBinary)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    number_of_channels = db.Column(db.Integer)
+    sample_rate = db.Column(db.Integer)
+    sample_size = db.Column(db.Integer)
+    mime_type = db.Column(db.String(100))
+    locale = db.Column(db.String(100))
     performance_report = db.relationship(
         "PerformanceReport", uselist=False, back_populates="recording"
     )
@@ -31,6 +36,7 @@ class User(db.Model, UserMixin):
 class PerformanceReport(db.Model):
     id = db.Column(db.Integer, db.ForeignKey("recording.id"), primary_key=True)
 
+    overall_score = db.Column(db.Float)
     duration = db.Column(db.Float)
     speech_duration = db.Column(db.Float)
     ratio_speech_time = db.Column(db.Float)
@@ -41,6 +47,9 @@ class PerformanceReport(db.Model):
     pitch_std = db.Column(db.Float)
     pitch_min = db.Column(db.Float)
     pitch_max = db.Column(db.Float)
+
+    transcript = db.Column(db.String(1000))  # this might not suffice for long speeches
+    words_per_minute = db.Column(db.Float)
 
     recording = db.relationship("Recording", back_populates="performance_report")
 

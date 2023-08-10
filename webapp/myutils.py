@@ -1,53 +1,134 @@
 import io
 import parselmouth as pm
-from pydub import AudioSegment
 import numpy as np
 import soundfile as sf
 import json
 import pandas as pd
-
-# AudioSegment.converter = "C:\\PATH_programs\\ffmpeg.exe"
-# AudioSegment.ffmpeg = "C:\\PATH_programs\\ffmpeg.exe"
-# AudioSegment.ffprobe = "C:\\PATH_programs\\ffprobe.exe"
-
-
-def convert_webm_to_wav(input_file, output_file):
-    try:
-        # Load the WebM audio file using pydub
-        audio = AudioSegment.from_file(input_file, format="webm")
-        # Export the audio to WAV format
-        audio.export(output_file, format="wav")
-
-        print(f"Conversion successful. Output file saved as {output_file}")
-
-    except Exception as e:
-        print("An error occurred during conversion:", str(e))
+import speech_recognition as sr
+import ffmpeg
+import subprocess
+import nltk
+from nltk.tokenize import word_tokenize
+from .constants import *
 
 
-def run_performance_report(audio_bytes: bytes) -> dict:
-    print("run_performance_report() called")
+def convert_to_wav(
+    input_audio_bytes: bytes,
+    numberOfChannels: int,
+    sample_rate: int,
+    sample_size: int,
+    mime: str,
+) -> bytes:
+    # Decode the audio stream from the original file (which is probably in webm format)
+    format_ = mime.split("/")[1]
+    acodec = f"pcm_s{sample_size}le"
+    ac = numberOfChannels
+    ar = sample_rate
 
-    # save to webm file
-    with open("webapp/testing/webm/audio.webm", "wb") as f:
-        f.write(audio_bytes)
+    # Construct FFmpeg command
+    ffmpeg_cmd = [
+        "ffmpeg",
+        "-i",
+        "pipe:0",  # Input from pipe
+        "-f",
+        "wav",  # Output format
+        "-acodec",
+        acodec,
+        "-ac",
+        str(ac),
+        "-ar",
+        str(ar),
+        "pipe:1",  # Output to pipe
+    ]
 
-    # convert webm to wav
-    convert_webm_to_wav(
-        "webapp/testing/webm/audio.webm", "webapp/testing/wav/audio.wav"
+    # Run FFmpeg process
+    ffmpeg_process = subprocess.Popen(
+        ffmpeg_cmd,
+        stdin=subprocess.PIPE,  # Pipe input
+        stdout=subprocess.PIPE,  # Pipe output
+        stderr=subprocess.PIPE,  # Pipe error
     )
 
-    # load wav file
-    snd = MySound("webapp/testing/wav/audio.wav")
+    # Write input audio data to the process
+    ffmpeg_output, ffmpeg_error = ffmpeg_process.communicate(input=input_audio_bytes)
+
+    # Capture the stdout audio data into a bytes-like object
+    output_audio_bytes = io.BytesIO(ffmpeg_output)
+    output_audio_bytes = output_audio_bytes.read()
+
+    # save to wav file for testing purposes
+    with open("webapp/testing/wav/audio.wav", "wb") as f:
+        f.write(output_audio_bytes)
+
+    audio_data, sampling_frequency = sf.read(io.BytesIO(output_audio_bytes))
+
+    return output_audio_bytes
+
+
+def run_performance_report(
+    audio_bytes: bytes, sample_rate: int, sample_size: int, locale: str, n_channels: int
+) -> dict:
+    print("run_performance_report() called")
+
+    wav_values, sampling_frequency = sf.read(io.BytesIO(audio_bytes))
+
+    # convert to mono (if needed)
+    if n_channels > 1:
+        wav_values = np.mean(wav_values, axis=1)
+
+    snd = MySound(
+        wav_values,
+        sampling_frequency,
+        sample_size=sample_size,
+        locale=locale,
+        audio_bytes=audio_bytes,
+    )
     performance_report = snd.getPerformanceReport()
+
     return performance_report
+
+
+# def run_performance_report_old(audio_bytes: bytes) -> dict:
+#     print("run_performance_report() called")
+
+#     wav_values, sampling_frequency = sf.read(io.BytesIO(audio_bytes))
+#     snd = MySound(wav_values, sampling_frequency)
+#     performance_report = snd.getPerformanceReport()
+#     return performance_report
+
+
+# def run_transcription(
+#     audio_bytes: bytes, sample_rate: int, sample_size: int, locale: str
+# ) -> str:
+#     print("run_transcription() called")
+
+#     recognizer = sr.Recognizer()
+#     sample_width = int(sample_size / 8)
+#     # because sample_size is in bits and sample_width is in bytes
+#     audio_data = sr.AudioData(audio_bytes, sample_rate, sample_width)
+#     # save to wav file
+#     with open("webapp/testing/wav/audioBIS.wav", "wb") as f:
+#         f.write(audio_data.get_wav_data())
+#     try:
+#         print(f"Transcribing audio with locale {locale}")
+#         transcript = recognizer.recognize_google(audio_data, language=locale)
+#         words = word_tokenize(transcript)
+#         return transcript, words
+#     except sr.UnknownValueError:
+#         return "Speech Recognition could not understand audio"
 
 
 class MySound(pm.Sound):
     """MySound is a subclass of pm.Sound that adds a few methods to the pm.Sound class."""
 
-    def __init__(self, filename: str, **kwargs):
-        super().__init__(filename, **kwargs)
-        self = self.convert_to_mono()  # convert to mono if necessary
+    def __init__(self, wav_values, sampling_frequency, **kwargs):
+        super().__init__(wav_values, sampling_frequency)
+        self.sample_size = kwargs.get("sample_size", None)
+        self.sample_rate = int(
+            self.sampling_frequency
+        )  # pm.Sound already offers self.sampling_frequency but it's float and we want int
+        self.locale = kwargs.get("locale", None)
+        self.audio_bytes = kwargs.get("audio_bytes", None)
 
     def getWaveform(self):
         """Returns the waveform of the sound as a numpy array."""
@@ -119,15 +200,37 @@ class MySound(pm.Sound):
         for start, end in segments:
             waveform = waveform[~((waveform.index >= start) & (waveform.index <= end))]
         extracted_sound = MySound(
-            waveform.values.T, sampling_frequency=self.sampling_frequency
+            waveform.values.T, sampling_frequency=self.sample_rate
         )
 
         return extracted_sound
 
+    def getTranscription(self):
+        recognizer = sr.Recognizer()
+        sample_width = int(self.sample_size / 8)
+        # because sample_size is in bits and sample_width is in bytes
+
+        audio_data = sr.AudioData(self.audio_bytes, int(self.sample_rate), sample_width)
+        try:
+            transcript = recognizer.recognize_google(audio_data, language=self.locale)
+            # print transcript in yellow
+            print("Transcript: " + "\033[93m" + transcript + "\033[0m")
+            words = word_tokenize(transcript)
+            return transcript, words
+        except sr.UnknownValueError:
+            return "Speech Recognition could not understand audio"
+
     def getPerformanceReport(self):
         """Returns a dictionary containing the performance report of the sound."""
+        # print in red
+        print("\033[91m" + "Generating performance report..." + "\033[0m")
         # get duration
         duration = self.duration
+
+        # get transcript
+        transcript, words = self.getTranscription()
+        words_per_minute = len(words) / (duration / 60)
+
         # get speech only
         speech_only = self.getSpeechOnly()
         speech_duration = speech_only.duration
@@ -148,6 +251,36 @@ class MySound(pm.Sound):
             "pitch_std": pitch_std,
             "pitch_min": pitch_min,
             "pitch_max": pitch_max,
+            "transcript": transcript,
+            "words_per_minute": words_per_minute,
         }
-
+        overall_score = self.getOverallScore(report)
+        report["overall_score"] = overall_score
         return report
+
+    def getOverallScore(self, report):
+        """Computes the overall score."""
+
+        # TODO: improve ffs!
+
+        # pe stands for "percentage error"
+        terms = {}
+        terms["wpm_pe"] = (report["words_per_minute"] - IDEAL_WPM) / IDEAL_WPM
+        terms["pitch_std_pe"] = (
+            report["pitch_std"] - IDEAL_PITCH_STD
+        ) / IDEAL_PITCH_STD
+        terms["intensity_std_pe"] = (
+            report["intensity_std"] - IDEAL_INTENSITY_STD
+        ) / IDEAL_INTENSITY_STD
+        terms["ratio_speech_time_pe"] = (
+            report["ratio_speech_time"] - IDEAL_RATIO_SPEECH_TIME
+        ) / IDEAL_RATIO_SPEECH_TIME
+
+        s = 0
+        for value in terms.values():
+            s += abs(value)
+        overall_score = 1 / s
+
+        overall_score *= 1000  # bigger is better
+
+        return overall_score

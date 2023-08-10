@@ -36,7 +36,7 @@ def delete_recording():
                 db.session.delete(recording.performance_report)
             db.session.delete(recording)
             db.session.commit()
-            flash("Recording deleted successfully", category="success")
+            # flash("Recording deleted successfully", category="success")
 
     return jsonify({})
 
@@ -65,9 +65,31 @@ def upload():
     if audio_file:
         audio_blob = audio_file.read()
 
-        performance_overview = myutils.run_performance_report(audio_blob)
+        # get metadata
+        numberOfChannels = int(request.form["numberOfChannels"])
+        sampleRate = int(request.form["sampleRate"])
+        sampleSize = int(request.form["sampleSize"])
+        mimeType = request.form["mime"]
+        locale = request.form["locale"]
+
+        # we want to save to wav bytes if the file is not already in the wav format
+        if mimeType != "audio/wav":
+            audio_blob = myutils.convert_to_wav(
+                audio_blob, numberOfChannels, sampleRate, sampleSize, mimeType
+            )
+
+        # now the audioBlob is in wav format! (nice!)
+        try:
+            performance_overview = myutils.run_performance_report(
+                audio_blob, sampleRate, sampleSize, locale, numberOfChannels
+            )
+        except Exception as e:
+            print(e)
+            print("\033[91m" + str(type(e)) + "\033[0m")
+            return "err"
 
         performance_report = PerformanceReport(
+            overall_score=performance_overview["overall_score"],
             duration=performance_overview["duration"],
             speech_duration=performance_overview["speech_duration"],
             ratio_speech_time=performance_overview["ratio_speech_time"],
@@ -78,17 +100,24 @@ def upload():
             pitch_std=performance_overview["pitch_std"],
             pitch_min=performance_overview["pitch_min"],
             pitch_max=performance_overview["pitch_max"],
+            transcript=performance_overview["transcript"],
+            words_per_minute=performance_overview["words_per_minute"],
         )
 
         new_recording = Recording(
             audio_blob=audio_blob,
             user_id=current_user.id,
             name=audio_file.filename,
+            number_of_channels=numberOfChannels,
+            sample_rate=sampleRate,
+            sample_size=sampleSize,
+            mime_type=mimeType,
+            locale=locale,
             performance_report=performance_report,
         )
         db.session.add(new_recording)
         db.session.commit()
-        flash("Recording saved successfully", category="success")
+        # flash("Recording saved successfully", category="success")
 
         return "upload successful"
     else:

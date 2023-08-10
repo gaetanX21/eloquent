@@ -20,7 +20,19 @@
     <p class="text-center">Recording not found!</p>
     {% else %} {% set performance_report = recording.performance_report %}
     <div id="scoreContainer" class="text-center p-4">
-      <h2>Overall score: {{ 42 }}</h2>
+      <h2>Overall score: {{ performance_report.overall_score|round|int }}</h2>
+    </div>
+    <div id="transcriptContainer" class="performance-box">
+      <h2>Transcript</h2>
+      <hr />
+      {{ performance_report.transcript }}
+      <hr />
+      {% set wpm=performance_report.words_per_minute|round|int %} {% if wpm <
+      100 %} Words per minute: {{ wpm }} (too slow) {% elif wpm < 125 %} Words
+      per minute: {{ wpm }} (slightly too slow) {% elif wpm < 200 %} Words per
+      minute: {{ wpm }} (good pace) {% elif wpm < 250 %} Words per minute: {{
+      wpm }} (slightly too fast) {% else %} Words per minute: {{ wpm }} (too
+      fast) {% endif %}
     </div>
     <div
       id="performanceBoxesContainer"
@@ -29,8 +41,10 @@
       <div id="durationContainer" class="performance-box flex-grow-1">
         <h2>Duration</h2>
         <hr />
-        <p>Total duration: {{ performance_report.duration }} s</p>
-        <p>Speech duration: {{ performance_report.speech_duration }} s</p>
+        <p>Total duration: {{ performance_report.duration|round|int }} s</p>
+        <p>
+          Speech duration: {{ performance_report.speech_duration|round|int }} s
+        </p>
         <p>
           Ratio speech time: {{
           '%0.2f'|format(performance_report.ratio_speech_time) }}
@@ -62,7 +76,9 @@
       <h2>Waveform</h2>
     </div>
     <div class="d-flex justify-content-center align-items-center m-4">
-      <button id="playPauseButton" class="btn btn-primary">Play/Pause</button>
+      <button id="playPauseButton" class="btn btn-primary">
+        <i class="fas fa-play"></i>
+      </button>
     </div>
     <script type="module">
       // wait for the DOM to load
@@ -353,7 +369,23 @@
       const playPauseButton = document.getElementById("playPauseButton");
       playPauseButton.addEventListener("click", function () {
         wavesurfer.playPause();
+        const icon = playPauseButton.querySelector("i");
+        icon.classList.toggle("fa-play");
+        icon.classList.toggle("fa-pause");
       });
+
+      function setDotPosition(value) {
+        const progressBar = document.getElementById("progress-bar");
+        const dot = document.getElementById("dot");
+        const min = parseFloat(progressBar.getAttribute("aria-valuemin"));
+        const max = parseFloat(progressBar.getAttribute("aria-valuemax"));
+        const width = progressBar.offsetWidth;
+
+        const percentage = ((value - min) / (max - min)) * 100;
+        const position = (percentage * width) / 100;
+
+        dot.style.left = `${position}px`;
+      }
     </script>
     {% endif %}
   </div>

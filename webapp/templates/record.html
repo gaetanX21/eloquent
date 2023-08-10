@@ -1,8 +1,92 @@
 {% extends 'base.html' %} {% block title %}Record{% endblock %} {% block content
 %}
+<style>
+  .flag-icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 10px;
+  }
+
+  .language-option {
+    display: flex;
+    align-items: center;
+  }
+</style>
 <div class="container">
   <h1 class="display-4 text-center my-4">Record</h1>
-  <div class="audio-container">
+  <div id="language-container" class="d-flex justify-content-center m-4">
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+      <div class="container">
+        <div class="dropdown">
+          <button
+            class="btn btn-secondary dropdown-toggle"
+            type="button"
+            id="languageDropdown"
+            data-bs-toggle="dropdown"
+            aria-haspopup="true"
+            aria-expanded="false"
+          >
+            Choose Language
+          </button>
+          <div
+            class="dropdown-menu"
+            aria-labelledby="languageDropdown"
+            id="languageDropdown"
+          >
+            <a class="dropdown-item language-option" href="#" data-lang="en-US"
+              ><img
+                src="{{ url_for('static', filename='img/flag-icons/united-states.png') }}"
+                alt="US flag"
+                class="flag-icon"
+              />
+              English (US)</a
+            >
+            <a class="dropdown-item language-option" href="#" data-lang="en-GB"
+              ><img
+                src="{{ url_for('static', filename='img/flag-icons/united-kingdom.png') }}"
+                alt="UK flag"
+                class="flag-icon"
+              />
+              English (UK)</a
+            >
+            <a class="dropdown-item language-option" href="#" data-lang="de-DE"
+              ><img
+                src="{{ url_for('static', filename='img/flag-icons/germany.png') }}"
+                alt="German flag"
+                class="flag-icon"
+              />
+              German</a
+            >
+            <a class="dropdown-item language-option" href="#" data-lang="fr-FR"
+              ><img
+                src="{{ url_for('static', filename='img/flag-icons/france.png') }}"
+                alt="French flag"
+                class="flag-icon"
+              />
+              French</a
+            >
+            <a class="dropdown-item language-option" href="#" data-lang="it-IT"
+              ><img
+                src="{{ url_for('static', filename='img/flag-icons/italy.png') }}"
+                alt="Italian flag"
+                class="flag-icon"
+              />
+              Italian</a
+            >
+            <a class="dropdown-item language-option" href="#" data-lang="es-ES"
+              ><img
+                src="{{ url_for('static', filename='img/flag-icons/spain.png') }}"
+                alt="Spanish flag"
+                class="flag-icon"
+              />
+              Spanish</a
+            >
+          </div>
+        </div>
+      </div>
+    </nav>
+  </div>
+  <div id="audio-container">
     <audio id="audio-preview" class="w-100 mb-3" controls></audio>
   </div>
   <div class="d-flex justify-content-center align-items-center">
@@ -30,6 +114,27 @@
           >00</span
         >
       </div>
+    </div>
+  </div>
+
+  <div
+    id="loadingOverlay"
+    class="d-none"
+    style="
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    "
+  >
+    <div class="spinner-border text-primary" role="status">
+      <span class="sr-only">Saving recording...</span>
     </div>
   </div>
 
