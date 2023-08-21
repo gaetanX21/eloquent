@@ -68,8 +68,6 @@ def convert_to_wav(
 def run_performance_report(
     audio_bytes: bytes, sample_rate: int, sample_size: int, locale: str, n_channels: int
 ) -> dict:
-    print("run_performance_report() called")
-
     wav_values, sampling_frequency = sf.read(io.BytesIO(audio_bytes))
 
     # convert to mono (if needed)
@@ -86,36 +84,6 @@ def run_performance_report(
     performance_report = snd.getPerformanceReport()
 
     return performance_report
-
-
-# def run_performance_report_old(audio_bytes: bytes) -> dict:
-#     print("run_performance_report() called")
-
-#     wav_values, sampling_frequency = sf.read(io.BytesIO(audio_bytes))
-#     snd = MySound(wav_values, sampling_frequency)
-#     performance_report = snd.getPerformanceReport()
-#     return performance_report
-
-
-# def run_transcription(
-#     audio_bytes: bytes, sample_rate: int, sample_size: int, locale: str
-# ) -> str:
-#     print("run_transcription() called")
-
-#     recognizer = sr.Recognizer()
-#     sample_width = int(sample_size / 8)
-#     # because sample_size is in bits and sample_width is in bytes
-#     audio_data = sr.AudioData(audio_bytes, sample_rate, sample_width)
-#     # save to wav file
-#     with open("webapp/testing/wav/audioBIS.wav", "wb") as f:
-#         f.write(audio_data.get_wav_data())
-#     try:
-#         print(f"Transcribing audio with locale {locale}")
-#         transcript = recognizer.recognize_google(audio_data, language=locale)
-#         words = word_tokenize(transcript)
-#         return transcript, words
-#     except sr.UnknownValueError:
-#         return "Speech Recognition could not understand audio"
 
 
 class MySound(pm.Sound):
@@ -213,23 +181,30 @@ class MySound(pm.Sound):
         audio_data = sr.AudioData(self.audio_bytes, int(self.sample_rate), sample_width)
         try:
             transcript = recognizer.recognize_google(audio_data, language=self.locale)
-            # print transcript in yellow
-            print("Transcript: " + "\033[93m" + transcript + "\033[0m")
+            myprint(f'Transcript: "{transcript}"', "blue")
             words = word_tokenize(transcript)
             return transcript, words
         except sr.UnknownValueError:
-            return "Speech Recognition could not understand audio"
+            myprint(
+                'Speech Recognition could not understand audio, returning transcript="" and words=[].',
+                "red",
+            )
+            return "", []
 
     def getPerformanceReport(self):
         """Returns a dictionary containing the performance report of the sound."""
-        # print in red
-        print("\033[91m" + "Generating performance report..." + "\033[0m")
+        myprint("Generating performance report...", "blue   ")
+
         # get duration
         duration = self.duration
 
         # get transcript
-        transcript, words = self.getTranscription()
-        words_per_minute = len(words) / (duration / 60)
+        if self.locale == "none":
+            transcript = ""
+            words_per_minute = 0
+        else:
+            transcript, words = self.getTranscription()
+            words_per_minute = len(words) / (duration / 60)
 
         # get speech only
         speech_only = self.getSpeechOnly()
@@ -256,16 +231,23 @@ class MySound(pm.Sound):
         }
         overall_score = self.getOverallScore(report)
         report["overall_score"] = overall_score
+
+        myprint("Performance report generated!", "green")
         return report
 
     def getOverallScore(self, report):
         """Computes the overall score."""
 
         # TODO: improve ffs!
+        # problem: score depends on whether we're using a transcript (using a transcript will always improve the score)
 
         # pe stands for "percentage error"
         terms = {}
-        terms["wpm_pe"] = (report["words_per_minute"] - IDEAL_WPM) / IDEAL_WPM
+
+        if (
+            report["words_per_minute"] != 0
+        ):  # this term exists only if there is a transcript
+            terms["wpm_pe"] = (report["words_per_minute"] - IDEAL_WPM) / IDEAL_WPM
         terms["pitch_std_pe"] = (
             report["pitch_std"] - IDEAL_PITCH_STD
         ) / IDEAL_PITCH_STD
@@ -284,3 +266,21 @@ class MySound(pm.Sound):
         overall_score *= 1000  # bigger is better
 
         return overall_score
+
+
+def myprint(text, color="white"):
+    text = str(text)  # in case we pass a number
+    if color == "red":
+        print("\033[91m" + text + "\033[0m")
+    elif color == "green":
+        print("\033[92m" + text + "\033[0m")
+    elif color == "yellow":
+        print("\033[93m" + text + "\033[0m")
+    elif color == "blue":
+        print("\033[94m" + text + "\033[0m")
+    elif color == "magenta":
+        print("\033[95m" + text + "\033[0m")
+    elif color == "cyan":
+        print("\033[96m" + text + "\033[0m")
+    else:  # if color == "white" or any other value for color
+        print(text)

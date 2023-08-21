@@ -33,6 +33,14 @@
             aria-labelledby="languageDropdown"
             id="languageDropdown"
           >
+            <a class="dropdown-item language-option" href="#" data-lang="none"
+              ><img
+                src="{{ url_for('static', filename='img/flag-icons/forbidden.png') }}"
+                alt="no transcript"
+                class="flag-icon"
+              />
+              No transcript (faster)</a
+            >
             <a class="dropdown-item language-option" href="#" data-lang="en-US"
               ><img
                 src="{{ url_for('static', filename='img/flag-icons/united-states.png') }}"
@@ -133,12 +141,19 @@
       z-index: 9999;
     "
   >
-    <div class="spinner-border text-primary" role="status">
-      <span class="sr-only">Saving recording...</span>
+    <div class="d-flex flex-column align-items-center">
+      <div class="spinner-border spinner-border-lg text-primary" role="status">
+        <span class="sr-only">Saving recording...</span>
+      </div>
+      <div id="waiting-text" class="text-primary fs-5">
+        Saving recording, please wait
+      </div>
     </div>
-  </div>
 
-  {% endblock %} {% block scripts %}
-  <script src="{{ url_for('static', filename='record.js') }}"></script>
-  {% endblock %}
+    {% endblock %} {% block scripts %}
+    <script src="{{ url_for('static', filename='message_flash.js') }}"></script>
+    <script src="{{ url_for('static', filename='record.js') }}"></script>
+
+    {% endblock %}
+  </div>
 </div>

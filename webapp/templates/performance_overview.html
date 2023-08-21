@@ -3,29 +3,44 @@
 <style>
   .performance-box {
     border: 1px solid #ccc;
-    padding: 20px;
+    padding: 10px;
     border-radius: 5px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     margin-right: 10px;
     text-align: center;
     justify-content: center;
-  }
+    background-color: #fff; /* Set the initial background color */
+    transition: background-color 0.3s; /* Adding transition for smooth effect */
+}
+
+.performance-box:hover {
+    background-color: rgba(100, 210, 230, 0.1)
+}
+
+.performance-box p {
+    margin-bottom: 0px;
+    padding-bottom: 0px;
+}
+
+
 </style>
-<div class="container">
+<div class="container-fluid">
   <h1 class="display-4 text-center my-4">Recording #{{ recording_id }}</h1>
+  <br />
   <div id="summary">
     <!-- select recording with ID equal to recording_id through filtering -->
     {% set recording = user.recordings|selectattr('id', 'equalto', recording_id)
     |first %} {% if not recording %}
     <p class="text-center">Recording not found!</p>
     {% else %} {% set performance_report = recording.performance_report %}
-    <div id="scoreContainer" class="text-center p-4">
-      <h2>Overall score: {{ performance_report.overall_score|round|int }}</h2>
+    <div id="scoreContainer" class="performance-box p-4">
+      <h1>Overall score: {{ performance_report.overall_score|round|int }}</h2>
     </div>
-    <div id="transcriptContainer" class="performance-box">
+    {% if performance_report.transcript != "" %}
+    <div id="transcriptContainer" class="performance-box mt-2">
       <h2>Transcript</h2>
       <hr />
-      {{ performance_report.transcript }}
+      <i>{{ performance_report.transcript }}</i>
       <hr />
       {% set wpm=performance_report.words_per_minute|round|int %} {% if wpm <
       100 %} Words per minute: {{ wpm }} (too slow) {% elif wpm < 125 %} Words
@@ -34,12 +49,13 @@
       wpm }} (slightly too fast) {% else %} Words per minute: {{ wpm }} (too
       fast) {% endif %}
     </div>
+    {% endif %}
     <div
       id="performanceBoxesContainer"
-      class="d-flex justify-content-center align-items-stretch m-4"
+      class="d-flex justify-content-center align-items-stretch mt-2"
     >
       <div id="durationContainer" class="performance-box flex-grow-1">
-        <h2>Duration</h2>
+        <h2>Duration</h2>     
         <hr />
         <p>Total duration: {{ performance_report.duration|round|int }} s</p>
         <p>
@@ -72,14 +88,15 @@
         <p>Max pitch: {{ performance_report.pitch_max|round|int }} Hz</p>
       </div>
     </div>
-    <div id="waveformContainer" class="mt-4 pt-4 text-center">
+    <div id="waveformContainer" class="mt-2 mb-3 text-center performance-box">
       <h2>Waveform</h2>
-    </div>
-    <div class="d-flex justify-content-center align-items-center m-4">
-      <button id="playPauseButton" class="btn btn-primary">
+      <hr />
+      <div id="waveformPlot"></div>
+      <button id="playPauseButton" class="btn btn-primary mt-2">
         <i class="fas fa-play"></i>
       </button>
     </div>
+
     <script type="module">
       // wait for the DOM to load
       import WaveSurfer from "https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.esm.js";
@@ -87,7 +104,7 @@
 
       // now we can use the waveform object to draw the waveform
       const wavesurfer = WaveSurfer.create({
-        container: "#waveformContainer",
+        container: "#waveformPlot",
         waveColor: "rgb(200, 0, 200)",
         progressColor: "rgb(100, 0, 100)",
         backend: "MediaElement",

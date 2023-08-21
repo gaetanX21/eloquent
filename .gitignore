@@ -1,5 +1,6 @@
 webapp/static
 webapp/venv
+data
 
 *.ipynb
 *.wav

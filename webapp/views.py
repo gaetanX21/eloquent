@@ -19,14 +19,14 @@ views = Blueprint("views", __name__)
 
 @views.route("/", methods=["GET", "POST"])
 def home():
-    print("/ route hit")
+    myutils.myprint("/ route hit", "yellow")
     return render_template("home.html", user=current_user)
 
 
 @views.route("/delete-recording", methods=["POST"])
 @login_required
 def delete_recording():
-    print("/delete-recording route hit")
+    myutils.myprint("/delete-recording route hit", "yellow")
     data = json.loads(request.data)
     recording_id = data["recordingId"]
     recording = Recording.query.get(recording_id)
@@ -36,29 +36,49 @@ def delete_recording():
                 db.session.delete(recording.performance_report)
             db.session.delete(recording)
             db.session.commit()
-            # flash("Recording deleted successfully", category="success")
 
-    return jsonify({})
+    # if there are no more recordings, refresh page
+    remaining_recordings = Recording.query.filter_by(user_id=current_user.id).all()
+    n_remaining_recordings = len(remaining_recordings)
+    myutils.myprint(n_remaining_recordings, "cyan")
+    ret = jsonify({"n_remaining_recordings": n_remaining_recordings})
+    print(ret)
+    return ret
+
+
+@views.route("/delete_all_recordings", methods=["POST"])
+@login_required
+def delete_all_recordings():
+    myutils.myprint("/delete_all_recordings route hit", "yellow")
+    recordings = Recording.query.filter_by(user_id=current_user.id).all()
+    for recording in recordings:
+        if recording.performance_report:
+            db.session.delete(recording.performance_report)
+        db.session.delete(recording)
+    db.session.commit()
+
+    # refresh page
+    return redirect(url_for("views.saved"))
 
 
 @views.route("/record")
 @login_required
 def record():
-    print("/record route hit")
+    myutils.myprint("/record route hit", "yellow")
     return render_template("record.html", user=current_user)
 
 
 @views.route("/profile")
 @login_required
 def profile():
-    print("/profile route hit")
+    myutils.myprint("/profile route hit", "yellow")
     return render_template("profile.html", user=current_user)
 
 
 @views.route("/upload", methods=["POST"])
 @login_required
 def upload():
-    print("/upload route hit")
+    myutils.myprint("/upload route hit", "yellow")
     audio_file = request.files["audio"]
 
     # add audio file to database
@@ -84,9 +104,8 @@ def upload():
                 audio_blob, sampleRate, sampleSize, locale, numberOfChannels
             )
         except Exception as e:
-            print(e)
-            print("\033[91m" + str(type(e)) + "\033[0m")
-            return "err"
+            myutils.myprint(e, "red")
+            return "upload unsuccessful"
 
         performance_report = PerformanceReport(
             overall_score=performance_overview["overall_score"],
@@ -129,7 +148,7 @@ def upload():
 @views.route("/play_audio/<int:recording_id>")
 @login_required
 def play_audio(recording_id):
-    print("/play_audio route hit")
+    myutils.myprint("/play_audio route hit", "yellow")
     recording = Recording.query.get_or_404(recording_id)
     audio_bytes = recording.audio_blob
     response = make_response(audio_bytes)
@@ -141,14 +160,14 @@ def play_audio(recording_id):
 @views.route("/saved")
 @login_required
 def saved():
-    print("/saved route hit")
+    myutils.myprint("/saved route hit", "yellow")
     return render_template("saved.html", user=current_user)
 
 
 @views.route("/performance_overview")
 @login_required
 def performance_overview():
-    print("/performance_overview route hit")
+    myutils.myprint("/performance_overview route hit", "yellow")
     recording_id = int(
         request.args.get("recording_id")
     )  # careful, arguments passed in URL are strings by default
