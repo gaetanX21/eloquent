@@ -9,7 +9,8 @@ import ffmpeg
 import subprocess
 import nltk
 from nltk.tokenize import word_tokenize
-from .constants import *
+from constants import *
+import matplotlib.pyplot as plt
 
 
 def convert_to_wav(
@@ -75,8 +76,8 @@ def run_performance_report(
         wav_values = np.mean(wav_values, axis=1)
 
     snd = MySound(
-        wav_values,
-        sampling_frequency,
+        wav_values=wav_values,
+        sampling_frequency=sampling_frequency,
         sample_size=sample_size,
         locale=locale,
         audio_bytes=audio_bytes,
@@ -86,17 +87,55 @@ def run_performance_report(
     return performance_report
 
 
+def run_performance_report_from_wav(wav_file_path: str, locale: str = "none") -> dict:
+    # locale="none" means that we don't want to use speech recognition by default
+    wav_values, sampling_frequency = sf.read(wav_file_path)
+    wav_info = sf.info(wav_file_path)
+    sample_size = int(wav_info.subtype[-2:])  # sample_size is in bits
+    n_channels = wav_info.channels
+
+    with open(wav_file_path, "rb") as f:
+        wav_bytes = (
+            f.read()
+        )  # here we're assuming that the file is mono (important for later on)
+
+    snd = MySound(
+        wav_values,
+        sampling_frequency,
+        sample_size=sample_size,
+        locale=locale,
+        audio_bytes=wav_bytes,
+    )
+    performance_report = snd.getPerformanceReport()
+
+    return performance_report
+
+
 class MySound(pm.Sound):
     """MySound is a subclass of pm.Sound that adds a few methods to the pm.Sound class."""
 
-    def __init__(self, wav_values, sampling_frequency, **kwargs):
-        super().__init__(wav_values, sampling_frequency)
-        self.sample_size = kwargs.get("sample_size", None)
+    def __init__(
+        self, wav_values=None, sampling_frequency=None, filename=None, **kwargs
+    ):
+        """Constructor for the MySound class."""
+        if filename is not None:
+            super().__init__(filename)
+            with open(filename, "rb") as f:
+                self.audio_bytes = f.read()
+            info = sf.info(filename)
+            self.sample_size = int(info.subtype[-2:])
+        else:
+            super().__init__(wav_values, sampling_frequency)
+            self.sample_size = kwargs.get(
+                "sample_size", None
+            )  # sample_size is in bits (whereas sample_width is in bytes)
+            self.audio_bytes = kwargs.get("audio_bytes", None)
+
+        # with both constructors, we need to set the sample_rate and the locale
         self.sample_rate = int(
             self.sampling_frequency
         )  # pm.Sound already offers self.sampling_frequency but it's float and we want int
         self.locale = kwargs.get("locale", None)
-        self.audio_bytes = kwargs.get("audio_bytes", None)
 
     def getWaveform(self):
         """Returns the waveform of the sound as a numpy array."""
@@ -145,7 +184,59 @@ class MySound(pm.Sound):
 
         return pitch_mean, pitch_std, pitch_min, pitch_max
 
-    def getSpeechOnly(self):
+    def getFilteredPitchInfo(self):
+        """Returns the information about the *filtered* pitch of the sound as a tuple (mean, std, min, max)."""
+        pitch = self.to_pitch()
+        pitch_values = pitch.selected_array["frequency"]
+        pitch_values[pitch_values == 0] = np.nan
+        pitch_values = pitch_values[~np.isnan(pitch_values)]
+        # remove nan values
+        pitch_values = pitch_values[~np.isnan(pitch_values)]
+
+        pitch_mean = np.mean(pitch_values)
+        pitch_std = np.std(pitch_values)
+        z_scores = (pitch_values - pitch_mean) / pitch_std
+        outlier_threshold = 3
+        outlier_mask = np.abs(z_scores) > outlier_threshold
+        filtered_pitch_values = pitch_values[~outlier_mask]
+
+        filtered_pitch_mean = np.mean(filtered_pitch_values)
+        filtered_pitch_std = np.std(filtered_pitch_values)
+        filtered_pitch_min = np.min(filtered_pitch_values)
+        filtered_pitch_max = np.max(filtered_pitch_values)
+
+        return (
+            filtered_pitch_mean,
+            filtered_pitch_std,
+            filtered_pitch_min,
+            filtered_pitch_max,
+        )
+
+    def getHarmonicity(self):
+        """Returns the harmonicity of the sound as a numpy array."""
+        harmonicity = self.to_harmonicity()
+        return {"x": harmonicity.xs().tolist(), "y": harmonicity.values[0].T.tolist()}
+
+    def getHarmonicityInfo(self):
+        """Returns the information about the harmonicity of the sound as a tuple (mean, std, min, max)."""
+        harmonicity = self.to_harmonicity()
+        harmonicity_values = harmonicity.values[0].T
+        harmonicity_values[harmonicity_values == 0] = np.nan
+        # remove nan values
+        harmonicity_values = harmonicity_values[~np.isnan(harmonicity_values)]
+
+        # remove min value
+        min_harmonicity = np.min(harmonicity_values)
+        harmonicity_values = harmonicity_values[harmonicity_values != min_harmonicity]
+
+        harmonicity_mean = np.mean(harmonicity_values)
+        harmonicity_std = np.std(harmonicity_values)
+        harmonicity_min = np.min(harmonicity_values)
+        harmonicity_max = np.max(harmonicity_values)
+
+        return harmonicity_mean, harmonicity_std, harmonicity_min, harmonicity_max
+
+    def getSpeechOnly(self) -> "MySound":
         """Returns a subset of the sound that contains only the speech portion of the sound."""
         waveform = pd.Series(data=self.values[0].T, index=self.xs())
         intensity = pd.Series(
@@ -193,16 +284,20 @@ class MySound(pm.Sound):
 
     def getPerformanceReport(self):
         """Returns a dictionary containing the performance report of the sound."""
-        myprint("Generating performance report...", "blue   ")
+        myprint("Generating performance report...", "yellow")
 
         # get duration
         duration = self.duration
 
         # get transcript
         if self.locale == "none":
+            myprint("No locale specified, skipping speech recognition...", "yellow")
             transcript = ""
             words_per_minute = 0
         else:
+            myprint(
+                f"Performing speech recognition with locale {self.locale}...", "blue"
+            )
             transcript, words = self.getTranscription()
             words_per_minute = len(words) / (duration / 60)
 
@@ -266,6 +361,168 @@ class MySound(pm.Sound):
         overall_score *= 1000  # bigger is better
 
         return overall_score
+
+    def plot_all_together(self):
+        waveform = self.getWaveform()
+        plt.plot(
+            waveform["x"], waveform["y"], color="green", label="waveform", alpha=0.25
+        )
+        plt.yticks([])
+        plt.twinx()
+
+        intensity = self.getIntensity()
+        plt.plot(intensity["x"], intensity["y"], color="red", label="intensity")
+        plt.yticks([])
+        plt.twinx()
+
+        pitch = self.getPitch()
+        plt.plot(pitch["x"], pitch["y"], color="green", label="pitch", marker=".")
+        plt.yticks([])
+        plt.twinx()
+
+        harmonicity = self.getHarmonicity()
+        min_harmonicity = np.min(harmonicity["y"])
+        # only plot harmonicity where it's not min_harmonicity
+        harmonicity["y"] = [
+            h if h != min_harmonicity else np.nan for h in harmonicity["y"]
+        ]
+        plt.plot(harmonicity["x"], harmonicity["y"], color="blue", label="harmonicity")
+        plt.yticks([])
+
+        # add custom legend: red line for intensity, green line for pitch, blue line for harmonicity
+        intensity_patch = plt.Line2D([0], [0], color="red", label="intensity")
+        pitch_patch = plt.Line2D([0], [0], color="green", label="pitch", marker=".")
+        harmonicity_patch = plt.Line2D([0], [0], color="blue", label="harmonicity")
+        plt.legend(handles=[intensity_patch, pitch_patch, harmonicity_patch])
+
+        plt.show()
+
+    def plot_all_separate(self):
+        waveform = self.getWaveform()
+        # create 3 subplots vertically stacked
+        fig, axs = plt.subplots(3, 1, figsize=(20, 20))
+
+        # first subplot: waveform
+        ax = axs[0]
+        ax.set_ylabel("Amplitude")
+        ax.set_xlabel("Time (s)")
+        ax.plot(
+            waveform["x"], waveform["y"], color="green", label="waveform", alpha=0.25
+        )
+        ax = ax.twinx()
+        ax.set_ylabel("Intensity (dB)")
+        intensity = self.getIntensity()
+        intensity_std = np.std(intensity["y"])
+        intensity_mean = np.mean(intensity["y"])
+        ax.plot(intensity["x"], intensity["y"], color="red", label="intensity")
+        ax.set_title(
+            f"Intensity std: {intensity_std:.2f}; Intensity mean: {intensity_mean:.2f}"
+        )
+
+        # second subplot: pitch
+        ax = axs[1]
+        ax.set_ylabel("Amplitude")
+        ax.set_xlabel("Time (s)")
+        ax.plot(
+            waveform["x"], waveform["y"], color="green", label="waveform", alpha=0.25
+        )
+        ax = ax.twinx()
+        ax.set_ylabel("Pitch (Hz)")
+        pitch = self.getPitch()
+        df_pitch = pd.DataFrame({"x": pitch["x"], "y": pitch["y"]})
+        df_pitch.dropna(inplace=True)  # remove nan values
+        pitch_std = df_pitch["y"].std()
+        pitch_mean = df_pitch["y"].mean()
+        z_scores = (df_pitch["y"] - pitch_mean) / pitch_std
+        outlier_threshold = 3
+        outlier_mask = np.abs(z_scores) > outlier_threshold
+
+        df_pitch_filtered = df_pitch[~outlier_mask]
+        outliers = df_pitch[outlier_mask]
+        no_outlier_pitch_std = df_pitch_filtered["y"].std()
+        ax.plot(
+            df_pitch_filtered["x"],
+            df_pitch_filtered["y"],
+            color="green",
+            label="pitch (outliers removed)",
+            marker=".",
+        )
+        ax.plot(
+            outliers["x"],
+            outliers["y"],
+            color="red",
+            label="outliers",
+            marker="o",
+            linestyle="",
+        )
+        ax.set_title(
+            f"Pitch std: {pitch_std:.2f}. No outlier pitch std: {no_outlier_pitch_std:.2f}"
+        )
+
+        # third subplot: harmonicity
+        ax = axs[2]
+        ax.set_ylabel("Amplitude")
+        ax.set_xlabel("Time (s)")
+        ax.plot(
+            waveform["x"], waveform["y"], color="green", label="waveform", alpha=0.25
+        )
+        ax = ax.twinx()
+        ax.set_ylabel("Harmonicity")
+        harmonicity = self.getHarmonicity()
+        min_harmonicity = np.min(harmonicity["y"])
+        # only plot harmonicity where it's not min_harmonicity
+        harmonicity["y"] = [
+            h if h != min_harmonicity else np.nan for h in harmonicity["y"]
+        ]
+        harmonicity_std = np.nanstd(harmonicity["y"])  # ignore nan values
+        harmonicity_mean = np.nanmean(harmonicity["y"])  # ignore nan values
+        # add a horizontal line at the mean harmonicity
+        ax.axhline(
+            harmonicity_mean,
+            color="blue",
+            label=f"mean harmonicity",
+            linestyle="--",
+        )
+        ax.plot(harmonicity["x"], harmonicity["y"], color="blue", label="harmonicity")
+        ax.set_title(
+            f"Harmonicity std: {harmonicity_std:.2f}. Harmonicity mean: {harmonicity_mean:.2f}"
+        )
+
+        plt.show()
+
+    def get_features(self):
+        """Returns relevant features of the sound as a dictionary."""
+        intensity_mean, intensity_std, intensity_max = self.getIntensityInfo()
+        pitch_mean, pitch_std, pitch_min, pitch_max = self.getFilteredPitchInfo()
+        (
+            harmonicity_mean,
+            harmonicity_std,
+            harmonicity_min,
+            harmonicity_max,
+        ) = self.getHarmonicityInfo()
+
+        features = {
+            "intensity_std": intensity_std,
+            "pitch_std": pitch_std,
+            "harmonicity_mean": harmonicity_mean,
+        }
+
+        return features
+
+    def propose_score(self):
+        """Proposes a score for the sound."""
+        intensity_mean, intensity_std, intensity_max = self.getIntensityInfo()
+        pitch_mean, pitch_std, pitch_min, pitch_max = self.getFilteredPitchInfo()
+        (
+            harmonicity_mean,
+            harmonicity_std,
+            harmonicity_min,
+            harmonicity_max,
+        ) = self.getHarmonicityInfo()
+
+        print(f"Intensity std: {intensity_std:.2f}")
+        print(f"Pitch std: {pitch_std:.2f}")
+        print(f"Harmonicity mean: {harmonicity_mean:.2f}")
 
 
 def myprint(text, color="white"):
