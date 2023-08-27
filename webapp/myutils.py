@@ -138,6 +138,9 @@ class MySound(pm.Sound):
         self.locale = kwargs.get(
             "locale", None
         )  # locale None means that we don't want to use speech recognition by default
+        self.segment_duration_threshold = (
+            0.25  # in seconds, used in getSpeechOnlyHarmonicity
+        )
 
     def my_extract_part(self, from_time, to_time) -> "MySound":
         """Extracts a part of the sound."""
@@ -262,7 +265,13 @@ class MySound(pm.Sound):
 
         return harmonicity_mean, harmonicity_std, harmonicity_min, harmonicity_max
 
-    def getSpeechOnly(self) -> "MySound":
+    def getSpeechOnly(self):
+        return self.getSpeechOnlyHarmonicity()
+        # we use harmonicity as default criterion because it's more robust
+        # indeed, intensity use mean_intensity which can be affected by the presence of many blank spaces in the audio
+        # whereas harmonicity use min_harmonicity which is not affected by the presence of blank spaces in the audio
+
+    def getSpeechOnlyIntensity(self) -> "MySound":
         """Returns a subset of the sound that contains only the speech portion of the sound."""
         # uses intensity as a criterion
         waveform = pd.Series(data=self.values[0].T, index=self.xs())
@@ -274,10 +283,15 @@ class MySound(pm.Sound):
         # find segments with intensity below mean
         segments = []
         start = None
+        last_index = intensity.index[-1]
         for t, a in zip(intensity.index, intensity.values):
             if a < mean_int:
                 if start is None:
                     start = t
+                elif (
+                    t == last_index and start is not None
+                ):  # takes care of the case where there's an open segment and we got to the end of the sound so we want to close it
+                    segments.append((start, t))
             else:
                 if start is not None:
                     segments.append((start, t))
@@ -291,9 +305,14 @@ class MySound(pm.Sound):
 
         return extracted_sound
 
-    def getSpeechOnly2(self) -> "MySound":
+    def getSpeechOnlyHarmonicity(
+        self, segment_duration_threshold: float = None
+    ) -> "MySound":
         """Returns a subset of the sound that contains only the speech portion of the sound."""
-        # uses harmonicity as a criterion --> less accurate than with intensity
+        # uses harmonicity as a criterion
+        if segment_duration_threshold is None:
+            segment_duration_threshold = self.segment_duration_threshold
+
         waveform = self.getWaveform()
         harmonicity = self.getHarmonicity(
             remove_min=False
@@ -306,20 +325,25 @@ class MySound(pm.Sound):
         # find segments with intensity below mean
         segments = []
         start = None
+        last_index = harmonicity.index[-1]
         for t, a in zip(harmonicity.index, harmonicity.values):
             if np.isnan(a):  # this works, but 'if a==np.nan' doesn't work!
                 if start is None:  # we are at the beginning of a segment
                     start = t
+                elif (
+                    t == last_index and start is not None
+                ):  # takes care of the case where there's an open segment and we got to the end of the sound so we want to close it
+                    segments.append((start, t))
             else:
                 if start is not None:  # we are at the end of a segment
                     segments.append((start, t))
                     start = None
         for start, end in segments:
-            SEGMENT_DURATION_THRESHOLD = 0.1  # in seconds
+            SEGMENT_DURATION_THRESHOLD = 0.25  # in seconds
             segment_duration = end - start
             if (
-                segment_duration > SEGMENT_DURATION_THRESHOLD
-            ):  # if the segment is sufficiently long
+                segment_duration > segment_duration_threshold
+            ):  # if the segment is long enough
                 waveform = waveform[
                     ~((waveform.index >= start) & (waveform.index <= end))
                 ]
