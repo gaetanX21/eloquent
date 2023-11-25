@@ -9,7 +9,7 @@ import ffmpeg
 import subprocess
 import nltk
 from nltk.tokenize import word_tokenize
-from constants import *
+from .constants import *
 import matplotlib.pyplot as plt
 
 
